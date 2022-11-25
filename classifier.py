@@ -99,30 +99,32 @@ def getAvgFeatureVecs(reviews, model, num_features):
     return reviewFeatureVecs
 
 
-train_data = pd.read_csv("data/olid-training-v1.0.tsv", sep='\t')
-sentences_train = preprocess(train_data)
-num_features = 25
-f_matrix_train = getAvgFeatureVecs(sentences_train, model, num_features)
-print(f_matrix_train)
-test_data = pd.read_csv("data/testset-levela.tsv", sep='\t')
-sentences_test = preprocess(test_data)
-f_matrix_test = getAvgFeatureVecs(sentences_test, model, num_features)
-print(f_matrix_test)
+def train_MLP_model(path_to_train_file, num_layers=2):
 
-batch_size = 10000
-total_rows = f_matrix_train.shape[0]
-pos = 0
-classes = [0, 1]
-y_train = train_data['subtask_a']
+    train_data = pd.read_csv(path_to_train_file, sep='\t')
+    sentences_train = preprocess(train_data)
+    f_matrix_train = getAvgFeatureVecs(sentences_train, model, 25)
+    print(f_matrix_train)
+    classes = [0, 1]
+    y_train = train_data['subtask_a']
+
+    # label_encoder object knows how to understand word labels.
+    label_encoder = preprocessing.LabelEncoder()
+    y_train = label_encoder.fit_transform(y_train)
+    classifier = MLPClassifier(solver='adam', hidden_layer_sizes=(30, 30,), random_state=1)
+
+    return classifier, f_matrix_train, y_train, classes
 
 
-# label_encoder object knows how to understand word labels.
-label_encoder = preprocessing.LabelEncoder()
-y_train = label_encoder.fit_transform(y_train)
+def test_MLP_model(path_to_test_file, mlp_model):
+    test_data = pd.read_csv(path_to_test_file, sep='\t')
+    sentences_test = preprocess(test_data)
+    f_matrix_test = getAvgFeatureVecs(sentences_test, model, 25)
+    return f_matrix_test
 
-classifier = MLPClassifier(solver='adam', hidden_layer_sizes=(30,30,), random_state=1)
-classifier.partial_fit(f_matrix_train, y_train, classes)
-classifier.predict(f_matrix_test)
 
-# we have to train 6 different models with 6 different Y labels
-# y = [train['toxic'], train['severe_toxic']]
+mlp_model, f_matrix_train, y_train, classes = train_MLP_model("data/olid-training-v1.0.tsv", 2)
+
+f_matrix_test = test_MLP_model("data/testset-levela.tsv", mlp_model)
+mlp_model.partial_fit(f_matrix_train, y_train, classes)
+mlp_model.predict(f_matrix_test)
