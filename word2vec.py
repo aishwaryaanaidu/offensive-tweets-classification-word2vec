@@ -7,8 +7,8 @@ import re
 from collections import Counter
 
 
-info = api.info()  # show info about available models/datasets
-model = api.load("glove-twitter-25")
+info = api.info()
+model = api.load("glove-twitter-100")
 
 
 def cleaning_stopwords(text, stop_words):

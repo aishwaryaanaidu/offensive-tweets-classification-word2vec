@@ -7,6 +7,7 @@ import re
 import string
 
 from sklearn.neural_network import MLPClassifier
+from sklearn.metrics import accuracy_score
 
 info = api.info()
 model = api.load("glove-twitter-25")
@@ -62,69 +63,84 @@ def preprocess(data):
     return data
 
 
-def makeFeatureVec(words, model, num_features):
-    # Pre-initialize an empty numpy array (for speed)
-    featureVec = np.zeros((num_features,), dtype="float32")
-    #
+def make_feature_vectors(words, model, num_features):
+    feature_vectors = np.zeros((num_features,), dtype="float32")
     nwords = 0
-    #
-    # Index2word is a list that contains the names of the words in
-    # the model's vocabulary. Convert it to a set, for speed
     index2word_set = set(model.index_to_key)
-    #
-    # Loop over each word in the review and, if it is in the model's
-    # vocaublary, add its feature vector to the total
     for word in words:
         if word in index2word_set:
             nwords = nwords + 1
-            featureVec = np.add(featureVec, model[word])
-    # Divide the result by the number of words to get the average
+            feature_vectors = np.add(feature_vectors, model[word])
     if nwords == 0:
         nwords = 1
-    featureVec = np.divide(featureVec, nwords)
-    return featureVec
+    feature_vectors = np.divide(feature_vectors, nwords)
+    return feature_vectors
 
 
-def getAvgFeatureVecs(reviews, model, num_features):
-    # Given a set of reviews (each one a list of words), calculate
-    # the average feature vector for each one and return a 2D numpy array
-    # Preallocate a 2D numpy array, for speed
-    reviewFeatureVecs = np.zeros((len(reviews), num_features), dtype="float32")
+def get_average_feature_vectors(reviews, model, num_features):
+    review_feature_vectors = np.zeros((len(reviews), num_features), dtype="float32")
     counter = 0
-    # Loop through the reviews
     for review in reviews:
-        # Call the function (defined above) that makes average feature vectors
-        reviewFeatureVecs[counter] = makeFeatureVec(review, model, num_features)
+        review_feature_vectors[counter] = make_feature_vectors(review, model, num_features)
         counter = counter + 1
-    return reviewFeatureVecs
+    return review_feature_vectors
 
 
 def train_MLP_model(path_to_train_file, num_layers=2):
 
     train_data = pd.read_csv(path_to_train_file, sep='\t')
     sentences_train = preprocess(train_data)
-    f_matrix_train = getAvgFeatureVecs(sentences_train, model, 25)
-    print(f_matrix_train)
+    train_matrix = get_average_feature_vectors(sentences_train, model, 25)
     classes = [0, 1]
     y_train = train_data['subtask_a']
 
-    # label_encoder object knows how to understand word labels.
     label_encoder = preprocessing.LabelEncoder()
     y_train = label_encoder.fit_transform(y_train)
-    classifier = MLPClassifier(solver='adam', hidden_layer_sizes=(30, 30,), random_state=1)
+    classifier = MLPClassifier(solver='adam', hidden_layer_sizes=(num_layers, num_layers,), random_state=1)
 
-    return classifier, f_matrix_train, y_train, classes
+    return classifier, train_matrix, y_train, classes
 
 
 def test_MLP_model(path_to_test_file, mlp_model):
     test_data = pd.read_csv(path_to_test_file, sep='\t')
     sentences_test = preprocess(test_data)
-    f_matrix_test = getAvgFeatureVecs(sentences_test, model, 25)
-    return f_matrix_test
+    test_matrix = get_average_feature_vectors(sentences_test, model, 25)
+    return test_matrix
 
 
-mlp_model, f_matrix_train, y_train, classes = train_MLP_model("data/olid-training-v1.0.tsv", 2)
+actual_labels = pd.read_csv("data/labels-levela.csv", header=None)
+actual_labels = actual_labels.iloc[:, 1]
+actual_labels = actual_labels.factorize()[0]
 
-f_matrix_test = test_MLP_model("data/testset-levela.tsv", mlp_model)
-mlp_model.partial_fit(f_matrix_train, y_train, classes)
-mlp_model.predict(f_matrix_test)
+# MLP model with 2 layers
+print("MLP model with 2 layers")
+mlp_model, train_matrix, y_train, classes = train_MLP_model("data/olid-training-v1.0.tsv", 2)
+
+test_matrix = test_MLP_model("data/testset-levela.tsv", mlp_model)
+mlp_model.partial_fit(train_matrix, y_train, classes)
+predictions = mlp_model.predict(test_matrix)
+score = accuracy_score(actual_labels, predictions)
+print("Accuracy: {}".format(score))
+
+print("-------------------------------------------------------------------")
+
+print("MLP model with 1 layers")
+mlp_model, train_matrix, y_train, classes = train_MLP_model("data/olid-training-v1.0.tsv", 1)
+
+test_matrix = test_MLP_model("data/testset-levela.tsv", mlp_model)
+mlp_model.partial_fit(train_matrix, y_train, classes)
+predictions = mlp_model.predict(test_matrix)
+score = accuracy_score(actual_labels, predictions)
+print("Accuracy: {}".format(score))
+
+print("-------------------------------------------------------------------")
+
+print("MLP model with 3 layers")
+mlp_model, train_matrix, y_train, classes = train_MLP_model("data/olid-training-v1.0.tsv", 3)
+
+test_matrix = test_MLP_model("data/testset-levela.tsv", mlp_model)
+mlp_model.partial_fit(train_matrix, y_train, classes)
+predictions = mlp_model.predict(test_matrix)
+score = accuracy_score(actual_labels, predictions)
+print("Accuracy: {}".format(score))
+
